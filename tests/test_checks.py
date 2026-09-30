@@ -1,0 +1,87 @@
+"""Tests for k8s_ready_check."""
+
+import pytest
+
+from k8s_ready_check.checks import run_all
+
+
+def make_deployment(**overrides):
+    container = {
+        "name": "app",
+        "image": "registry.example.com/app:1.2.3",
+        "readinessProbe": {"httpGet": {"path": "/", "port": 8080}},
+        "livenessProbe": {"httpGet": {"path": "/", "port": 8080}},
+        "resources": {
+            "requests": {"cpu": "100m", "memory": "128Mi"},
+            "limits": {"cpu": "500m", "memory": "512Mi"},
+        },
+        "securityContext": {
+            "runAsNonRoot": True,
+            "allowPrivilegeEscalation": False,
+        },
+    }
+    container.update(overrides.pop("container", {}))
+    doc = {
+        "kind": "Deployment",
+        "metadata": {"name": "web"},
+        "spec": {
+            "replicas": 3,
+            "template": {"spec": {"containers": [container]}},
+        },
+    }
+    return doc
+
+
+def levels(findings):
+    return {f["level"] for f in findings}
+
+
+def test_clean_manifest_has_no_findings():
+    assert run_all(make_deployment()) == []
+
+
+def test_missing_readiness_probe_is_error():
+    doc = make_deployment(container={"readinessProbe": None})
+    del doc["spec"]["template"]["spec"]["containers"][0]["readinessProbe"]
+    findings = run_all(doc)
+    assert "error" in levels(findings)
+    assert any("readinessProbe" in f["message"] for f in findings)
+
+
+def test_latest_tag_is_error():
+    doc = make_deployment(container={"image": "app:latest"})
+    findings = run_all(doc)
+    assert any(
+        f["level"] == "error" and f["check"] == "image-tag" for f in findings
+    )
+
+
+def test_missing_resources_is_error():
+    doc = make_deployment()
+    del doc["spec"]["template"]["spec"]["containers"][0]["resources"]
+    findings = run_all(doc)
+    assert any(
+        f["level"] == "error" and f["check"] == "resources" for f in findings
+    )
+
+
+def test_single_replica_warns():
+    doc = make_deployment()
+    doc["spec"]["replicas"] = 1
+    findings = run_all(doc)
+    assert any(f["check"] == "replicas" for f in findings)
+
+
+def test_privilege_escalation_warns():
+    doc = make_deployment(
+        container={"securityContext": {"allowPrivilegeEscalation": True}}
+    )
+    findings = run_all(doc)
+    assert any(f["check"] == "security" for f in findings)
+
+
+def test_non_deployment_skips_replica_check():
+    doc = make_deployment()
+    doc["kind"] = "StatefulSet"
+    doc["spec"]["replicas"] = 1
+    assert not any(f["check"] == "replicas" for f in run_all(doc))
