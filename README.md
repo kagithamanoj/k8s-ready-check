@@ -29,6 +29,7 @@ with `--strict`).
 | image-tag | floating (`latest`/untagged) image | |
 | security | | not runAsNonRoot, privilege escalation allowed |
 | replicas | | Deployment with fewer than 2 replicas |
+| rolling-update | | Deployment without `strategy.rollingUpdate.maxUnavailable` set (or with an invalid value); `Recreate` strategy is skipped |
 
 ## Development
 

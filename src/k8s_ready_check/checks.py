@@ -114,6 +114,49 @@ def check_security_context(doc: dict) -> list[dict]:
     return findings
 
 
+def check_rolling_update(doc: dict) -> list[dict]:
+    if doc.get("kind") != "Deployment":
+        return []
+    strategy = doc.get("spec", {}).get("strategy", {}) or {}
+    if strategy.get("type", "RollingUpdate") != "RollingUpdate":
+        return []
+    rolling = strategy.get("rollingUpdate", {}) or {}
+    if "maxUnavailable" not in rolling:
+        return [
+            {
+                "level": "warn",
+                "check": "rolling-update",
+                "message": (
+                    "Deployment does not set "
+                    "strategy.rollingUpdate.maxUnavailable; "
+                    "Kubernetes defaults to 25%, so set it explicitly "
+                    "for a predictable rollout"
+                ),
+            }
+        ]
+    value = rolling["maxUnavailable"]
+    valid = False
+    if isinstance(value, int) and not isinstance(value, bool):
+        valid = value >= 0
+    elif isinstance(value, str) and value.endswith("%"):
+        digits = value[:-1]
+        valid = digits.isdigit() and 0 <= int(digits) <= 100
+    if not valid:
+        return [
+            {
+                "level": "warn",
+                "check": "rolling-update",
+                "message": (
+                    f"Deployment has invalid "
+                    f"strategy.rollingUpdate.maxUnavailable "
+                    f"'{value}'; use a non-negative count or a "
+                    "percentage up to 100%"
+                ),
+            }
+        ]
+    return []
+
+
 def check_replicas(doc: dict) -> list[dict]:
     if doc.get("kind") != "Deployment":
         return []
@@ -137,6 +180,7 @@ ALL_CHECKS = [
     check_resources,
     check_image_tags,
     check_security_context,
+    check_rolling_update,
     check_replicas,
 ]
 

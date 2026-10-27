@@ -26,6 +26,10 @@ def make_deployment(**overrides):
         "metadata": {"name": "web"},
         "spec": {
             "replicas": 3,
+            "strategy": {
+                "type": "RollingUpdate",
+                "rollingUpdate": {"maxUnavailable": 1, "maxSurge": 1},
+            },
             "template": {"spec": {"containers": [container]}},
         },
     }
@@ -85,3 +89,42 @@ def test_non_deployment_skips_replica_check():
     doc["kind"] = "StatefulSet"
     doc["spec"]["replicas"] = 1
     assert not any(f["check"] == "replicas" for f in run_all(doc))
+
+
+def test_missing_max_unavailable_warns():
+    doc = make_deployment()
+    del doc["spec"]["strategy"]
+    findings = run_all(doc)
+    assert any(
+        f["level"] == "warn" and f["check"] == "rolling-update"
+        for f in findings
+    )
+
+
+def test_explicit_max_unavailable_passes():
+    doc = make_deployment()
+    doc["spec"]["strategy"]["rollingUpdate"]["maxUnavailable"] = "25%"
+    assert not any(f["check"] == "rolling-update" for f in run_all(doc))
+
+
+def test_invalid_max_unavailable_warns():
+    doc = make_deployment()
+    doc["spec"]["strategy"]["rollingUpdate"]["maxUnavailable"] = "150%"
+    findings = run_all(doc)
+    assert any(
+        f["level"] == "warn" and f["check"] == "rolling-update"
+        for f in findings
+    )
+
+
+def test_recreate_strategy_skips_rolling_update_check():
+    doc = make_deployment()
+    doc["spec"]["strategy"] = {"type": "Recreate"}
+    assert not any(f["check"] == "rolling-update" for f in run_all(doc))
+
+
+def test_non_deployment_skips_rolling_update_check():
+    doc = make_deployment()
+    doc["kind"] = "StatefulSet"
+    del doc["spec"]["strategy"]
+    assert not any(f["check"] == "rolling-update" for f in run_all(doc))
