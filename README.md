@@ -30,6 +30,15 @@ with `--strict`).
 | security | | not runAsNonRoot, privilege escalation allowed |
 | replicas | | Deployment with fewer than 2 replicas |
 | rolling-update | | Deployment without `strategy.rollingUpdate.maxUnavailable` set (or with an invalid value); `Recreate` strategy is skipped |
+| termination-grace | | workload without `terminationGracePeriodSeconds` set (or with an invalid value) |
+
+## Tuning terminationGracePeriodSeconds
+
+Kubernetes defaults this to 30 seconds. Set it explicitly so a pod
+is not killed mid-shutdown: raise it when the app needs time to drain
+connections or finish in-flight work, and keep it tight when the app
+can stop quickly, so rollouts and node drains do not wait longer than
+they have to.
 
 ## Development
 

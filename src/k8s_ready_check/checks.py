@@ -114,6 +114,50 @@ def check_security_context(doc: dict) -> list[dict]:
     return findings
 
 
+def _pod_spec(doc: dict) -> dict:
+    try:
+        return doc["spec"]["template"]["spec"]
+    except (KeyError, TypeError):
+        return {}
+
+
+def check_termination_grace(doc: dict) -> list[dict]:
+    if not _containers(doc):
+        return []
+    pod = _pod_spec(doc)
+    if "terminationGracePeriodSeconds" not in pod:
+        return [
+            {
+                "level": "warn",
+                "check": "termination-grace",
+                "message": (
+                    "workload does not set "
+                    "terminationGracePeriodSeconds; "
+                    "Kubernetes defaults to 30 seconds, so set it "
+                    "explicitly to match how long shutdown needs"
+                ),
+            }
+        ]
+    value = pod["terminationGracePeriodSeconds"]
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, int)
+        or value < 0
+    ):
+        return [
+            {
+                "level": "warn",
+                "check": "termination-grace",
+                "message": (
+                    f"workload has invalid "
+                    f"terminationGracePeriodSeconds '{value}'; "
+                    "use a non-negative number of seconds"
+                ),
+            }
+        ]
+    return []
+
+
 def check_rolling_update(doc: dict) -> list[dict]:
     if doc.get("kind") != "Deployment":
         return []
@@ -181,6 +225,7 @@ ALL_CHECKS = [
     check_image_tags,
     check_security_context,
     check_rolling_update,
+    check_termination_grace,
     check_replicas,
 ]
 

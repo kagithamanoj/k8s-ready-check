@@ -30,7 +30,12 @@ def make_deployment(**overrides):
                 "type": "RollingUpdate",
                 "rollingUpdate": {"maxUnavailable": 1, "maxSurge": 1},
             },
-            "template": {"spec": {"containers": [container]}},
+            "template": {
+                "spec": {
+                    "terminationGracePeriodSeconds": 30,
+                    "containers": [container],
+                }
+            },
         },
     }
     return doc
@@ -121,6 +126,49 @@ def test_recreate_strategy_skips_rolling_update_check():
     doc = make_deployment()
     doc["spec"]["strategy"] = {"type": "Recreate"}
     assert not any(f["check"] == "rolling-update" for f in run_all(doc))
+
+
+def test_missing_termination_grace_warns():
+    doc = make_deployment()
+    del doc["spec"]["template"]["spec"]["terminationGracePeriodSeconds"]
+    findings = run_all(doc)
+    assert any(
+        f["level"] == "warn" and f["check"] == "termination-grace"
+        for f in findings
+    )
+
+
+def test_explicit_termination_grace_passes():
+    doc = make_deployment()
+    doc["spec"]["template"]["spec"]["terminationGracePeriodSeconds"] = 60
+    assert not any(f["check"] == "termination-grace" for f in run_all(doc))
+
+
+def test_invalid_termination_grace_warns():
+    doc = make_deployment()
+    doc["spec"]["template"]["spec"]["terminationGracePeriodSeconds"] = -5
+    findings = run_all(doc)
+    assert any(
+        f["level"] == "warn" and f["check"] == "termination-grace"
+        for f in findings
+    )
+
+
+def test_string_termination_grace_warns():
+    doc = make_deployment()
+    doc["spec"]["template"]["spec"]["terminationGracePeriodSeconds"] = "30s"
+    findings = run_all(doc)
+    assert any(
+        f["level"] == "warn" and f["check"] == "termination-grace"
+        for f in findings
+    )
+
+
+def test_no_template_skips_termination_grace_check():
+    doc = {"kind": "Deployment", "metadata": {"name": "web"}, "spec": {}}
+    assert not any(
+        f["check"] == "termination-grace" for f in run_all(doc)
+    )
 
 
 def test_non_deployment_skips_rolling_update_check():
