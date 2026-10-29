@@ -15,10 +15,46 @@ pip install -e .
 ```bash
 k8s-ready-check deployment.yaml
 k8s-ready-check --strict manifests/
+k8s-ready-check --output json deployment.yaml
 ```
 
 Exit code is 0 when clean, 1 on warnings, 2 on errors (warnings also fail
 with `--strict`).
+
+## Machine-readable output
+
+`--output json` prints a single JSON document instead of text lines, so
+CI jobs and other tools can parse the results. Each entry under
+`results` names the file, kind, and resource name, with its findings
+(level, check, and message) in a list that is empty for a clean
+resource. `summary` counts files, resources, findings, errors, and
+warnings. Exit codes are the same as in text mode.
+
+```json
+{
+  "results": [
+    {
+      "file": "deployment.yaml",
+      "kind": "Deployment",
+      "name": "web",
+      "findings": [
+        {
+          "level": "error",
+          "check": "image-tag",
+          "message": "container 'app' uses floating image tag 'app:latest'"
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "files": 1,
+    "resources": 1,
+    "findings": 1,
+    "errors": 1,
+    "warnings": 0
+  }
+}
+```
 
 ## Checks
 
