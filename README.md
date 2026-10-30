@@ -67,6 +67,19 @@ warnings. Exit codes are the same as in text mode.
 | replicas | | Deployment with fewer than 2 replicas |
 | rolling-update | | Deployment without `strategy.rollingUpdate.maxUnavailable` set (or with an invalid value); `Recreate` strategy is skipped |
 | termination-grace | | workload without `terminationGracePeriodSeconds` set (or with an invalid value) |
+| pod-disruption-budget | | Deployment or StatefulSet with no PodDisruptionBudget in the same namespace whose selector matches its pod template labels |
+
+## PodDisruptionBudget coverage
+
+A budget covers a workload when it is in the same namespace and
+every label in its `spec.selector.matchLabels` also appears on the
+workload's pod template labels. The CLI loads all input files before
+checking, so a budget in a separate file (or a separate document in
+the same file) counts. Matching is by `matchLabels` only; budgets
+that select pods with `matchExpressions` are not matched. Checking a
+single document through the library without passing the budget list
+skips this check, since a budget elsewhere cannot be ruled out from
+one document alone.
 
 ## Tuning terminationGracePeriodSeconds
 

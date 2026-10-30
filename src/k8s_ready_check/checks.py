@@ -158,6 +158,66 @@ def check_termination_grace(doc: dict) -> list[dict]:
     return []
 
 
+def _namespace(doc: dict) -> str:
+    return doc.get("metadata", {}).get("namespace") or "default"
+
+
+def _pod_template_labels(doc: dict) -> dict:
+    try:
+        return doc["spec"]["template"]["metadata"].get("labels", {}) or {}
+    except (KeyError, TypeError, AttributeError):
+        return {}
+
+
+def _pdb_covers(pdb: dict, namespace: str, pod_labels: dict) -> bool:
+    if _namespace(pdb) != namespace:
+        return False
+    try:
+        selector_labels = pdb["spec"]["selector"].get("matchLabels", {}) or {}
+    except (KeyError, TypeError, AttributeError):
+        return False
+    if not selector_labels:
+        return False
+    return all(pod_labels.get(key) == value for key, value in selector_labels.items())
+
+
+def check_pod_disruption_budget(doc: dict, pdbs: list[dict] | None) -> list[dict]:
+    """Warn when no PodDisruptionBudget covers a replicated workload.
+
+    ``pdbs`` is the full set of PodDisruptionBudget documents seen in
+    the run, so a budget in another file (or another document in the
+    same file) still counts. When ``pdbs`` is None, no budget
+    information is available and the check is skipped, so a caller
+    checking a single document in isolation is not warned for a
+    budget that may exist elsewhere. Matching is by matchLabels
+    only: a budget covers the workload when it is in the same
+    namespace and every one of its selector labels matches a pod
+    template label. Budgets using matchExpressions are not matched.
+    """
+    if pdbs is None:
+        return []
+    if doc.get("kind") not in ("Deployment", "StatefulSet"):
+        return []
+    if not _containers(doc):
+        return []
+    pod_labels = _pod_template_labels(doc)
+    namespace = _namespace(doc)
+    if any(_pdb_covers(pdb, namespace, pod_labels) for pdb in pdbs):
+        return []
+    return [
+        {
+            "level": "warn",
+            "check": "pod-disruption-budget",
+            "message": (
+                f"{doc['kind']} has no PodDisruptionBudget covering "
+                "its pods; add one in the same namespace whose "
+                "selector matches the pod template labels, so "
+                "voluntary evictions keep enough replicas available"
+            ),
+        }
+    ]
+
+
 def check_rolling_update(doc: dict) -> list[dict]:
     if doc.get("kind") != "Deployment":
         return []
@@ -230,8 +290,9 @@ ALL_CHECKS = [
 ]
 
 
-def run_all(doc: dict) -> list[dict]:
+def run_all(doc: dict, pdbs: list[dict] | None = None) -> list[dict]:
     findings: list[dict] = []
     for check in ALL_CHECKS:
         findings.extend(check(doc))
+    findings.extend(check_pod_disruption_budget(doc, pdbs))
     return findings

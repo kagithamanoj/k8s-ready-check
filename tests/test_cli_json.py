@@ -20,6 +20,8 @@ spec:
       maxUnavailable: 1
       maxSurge: 1
   template:
+    metadata:
+      labels: {app: web}
     spec:
       terminationGracePeriodSeconds: 30
       containers:
@@ -35,6 +37,15 @@ spec:
           securityContext:
             runAsNonRoot: true
             allowPrivilegeEscalation: false
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: web-pdb
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels: {app: web}
 """
 
 FLOATING_TAG = CLEAN.replace(
@@ -59,11 +70,17 @@ def test_json_clean_manifest_reports_no_findings(tmp_path, capsys):
             "kind": "Deployment",
             "name": "web",
             "findings": [],
-        }
+        },
+        {
+            "file": path,
+            "kind": "PodDisruptionBudget",
+            "name": "web-pdb",
+            "findings": [],
+        },
     ]
     assert out["summary"] == {
         "files": 1,
-        "resources": 1,
+        "resources": 2,
         "findings": 0,
         "errors": 0,
         "warnings": 0,
@@ -97,10 +114,12 @@ def test_json_covers_multiple_documents(tmp_path, capsys):
     code = main([path, "--output", "json"])
     out = json.loads(capsys.readouterr().out)
     assert code == 1
-    assert len(out["results"]) == 2
+    assert len(out["results"]) == 4
     assert out["results"][0]["findings"] == []
-    assert out["results"][1]["findings"]
-    assert out["summary"]["resources"] == 2
+    assert out["results"][1]["findings"] == []
+    assert out["results"][2]["findings"]
+    assert out["results"][3]["findings"] == []
+    assert out["summary"]["resources"] == 4
 
 
 def test_text_output_is_unchanged(tmp_path, capsys):
@@ -108,6 +127,9 @@ def test_text_output_is_unchanged(tmp_path, capsys):
     code = main([path])
     out = capsys.readouterr().out
     assert code == 0
-    assert out.strip() == f"ok   Deployment/web ({path})"
+    assert out.strip() == (
+        f"ok   Deployment/web ({path})\n"
+        f"ok   PodDisruptionBudget/web-pdb ({path})"
+    )
     with pytest.raises(json.JSONDecodeError):
         json.loads(out)
