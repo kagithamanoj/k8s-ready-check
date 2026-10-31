@@ -32,6 +32,7 @@ def make_deployment(**overrides):
             },
             "template": {
                 "spec": {
+                    "serviceAccountName": "web",
                     "terminationGracePeriodSeconds": 30,
                     "containers": [container],
                 }

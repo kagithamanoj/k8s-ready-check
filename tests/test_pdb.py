@@ -36,6 +36,7 @@ def make_workload(kind="Deployment", labels=None, namespace=None):
             "template": {
                 "metadata": {"labels": labels if labels is not None else {"app": "web"}},
                 "spec": {
+                    "serviceAccountName": "web",
                     "terminationGracePeriodSeconds": 30,
                     "containers": [container],
                 },
@@ -144,6 +145,7 @@ spec:
     metadata:
       labels: {app: web}
     spec:
+      serviceAccountName: web
       terminationGracePeriodSeconds: 30
       containers:
         - name: app

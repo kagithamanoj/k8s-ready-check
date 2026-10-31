@@ -121,6 +121,37 @@ def _pod_spec(doc: dict) -> dict:
         return {}
 
 
+def check_service_account(doc: dict) -> list[dict]:
+    if not _containers(doc):
+        return []
+    pod = _pod_spec(doc)
+    name = pod.get("serviceAccountName")
+    if name is None:
+        name = pod.get("serviceAccount")
+    if isinstance(name, str) and name and name != "default":
+        return []
+    if name == "default":
+        message = (
+            "workload uses the default ServiceAccount; set "
+            "serviceAccountName to a dedicated account so its "
+            "permissions can be scoped to what the workload needs"
+        )
+    else:
+        message = (
+            "workload does not set a dedicated serviceAccountName, "
+            "so it runs as the default ServiceAccount; set "
+            "serviceAccountName to a dedicated account so its "
+            "permissions can be scoped to what the workload needs"
+        )
+    return [
+        {
+            "level": "warn",
+            "check": "service-account",
+            "message": message,
+        }
+    ]
+
+
 def check_termination_grace(doc: dict) -> list[dict]:
     if not _containers(doc):
         return []
@@ -284,6 +315,7 @@ ALL_CHECKS = [
     check_resources,
     check_image_tags,
     check_security_context,
+    check_service_account,
     check_rolling_update,
     check_termination_grace,
     check_replicas,

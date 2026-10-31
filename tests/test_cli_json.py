@@ -23,6 +23,7 @@ spec:
     metadata:
       labels: {app: web}
     spec:
+      serviceAccountName: web
       terminationGracePeriodSeconds: 30
       containers:
         - name: app

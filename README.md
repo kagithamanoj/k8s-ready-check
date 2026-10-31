@@ -64,6 +64,7 @@ warnings. Exit codes are the same as in text mode.
 | resources | no requests | no limits |
 | image-tag | floating (`latest`/untagged) image | |
 | security | | not runAsNonRoot, privilege escalation allowed |
+| service-account | | workload without a dedicated serviceAccountName (missing or `default`) |
 | replicas | | Deployment with fewer than 2 replicas |
 | rolling-update | | Deployment without `strategy.rollingUpdate.maxUnavailable` set (or with an invalid value); `Recreate` strategy is skipped |
 | termination-grace | | workload without `terminationGracePeriodSeconds` set (or with an invalid value) |
@@ -80,6 +81,14 @@ that select pods with `matchExpressions` are not matched. Checking a
 single document through the library without passing the budget list
 skips this check, since a budget elsewhere cannot be ruled out from
 one document alone.
+
+## ServiceAccount
+
+A pod without `serviceAccountName` runs as the `default`
+ServiceAccount for its namespace, which is shared by every workload
+that does not name one. Give each workload a dedicated account, so
+RBAC can grant only what that workload needs. The older
+`serviceAccount` field counts as well.
 
 ## Tuning terminationGracePeriodSeconds
 
