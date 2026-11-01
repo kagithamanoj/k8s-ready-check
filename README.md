@@ -16,10 +16,26 @@ pip install -e .
 k8s-ready-check deployment.yaml
 k8s-ready-check --strict manifests/
 k8s-ready-check --output json deployment.yaml
+k8s-ready-check --ignore replicas,pod-disruption-budget deployment.yaml
 ```
 
 Exit code is 0 when clean, 1 on warnings, 2 on errors (warnings also fail
 with `--strict`).
+
+## Skipping checks
+
+`--ignore` skips checks by name, for findings a team has deliberately
+accepted. It is repeatable and accepts comma-separated names:
+
+```bash
+k8s-ready-check --ignore replicas --ignore probes,resources deployment.yaml
+```
+
+Valid names are the check names from the table below: `probes`,
+`resources`, `image-tag`, `security`, `service-account`, `replicas`,
+`rolling-update`, `termination-grace`, and `pod-disruption-budget`.
+An unknown name is a usage error. Ignored checks produce no findings,
+in text or JSON output, and do not affect the exit code.
 
 ## Machine-readable output
 

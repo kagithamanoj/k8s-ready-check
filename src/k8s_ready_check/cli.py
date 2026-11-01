@@ -8,7 +8,18 @@ import sys
 
 import yaml
 
-from .checks import run_all
+from .checks import CHECK_NAMES, run_all
+
+
+def _parse_ignore(values: list[str]) -> set[str]:
+    """Split --ignore values on commas and drop blanks."""
+    names = set()
+    for value in values:
+        for name in value.split(","):
+            name = name.strip()
+            if name:
+                names.add(name)
+    return names
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -28,7 +39,25 @@ def main(argv: list[str] | None = None) -> int:
         default="text",
         help="Output format: human-readable text (default) or JSON.",
     )
+    parser.add_argument(
+        "--ignore",
+        action="append",
+        default=[],
+        metavar="CHECK",
+        help=(
+            "Skip a check by name; repeatable and comma-separated, "
+            "e.g. --ignore replicas --ignore probes,resources. "
+            f"Valid names: {', '.join(CHECK_NAMES)}."
+        ),
+    )
     args = parser.parse_args(argv)
+    ignored = _parse_ignore(args.ignore)
+    unknown = sorted(ignored - set(CHECK_NAMES))
+    if unknown:
+        parser.error(
+            f"unknown check(s): {', '.join(unknown)}; "
+            f"valid names: {', '.join(CHECK_NAMES)}"
+        )
 
     # Load every document first: the PodDisruptionBudget check needs
     # the full set of budgets, which may live in another file or
@@ -48,7 +77,7 @@ def main(argv: list[str] | None = None) -> int:
     for path, doc in all_docs:
         kind = doc.get("kind", "?")
         name = doc.get("metadata", {}).get("name", "?")
-        findings = run_all(doc, pdbs=pdb_docs)
+        findings = run_all(doc, pdbs=pdb_docs, ignore=ignored)
         results.append(
             {
                 "file": path,

@@ -321,10 +321,34 @@ ALL_CHECKS = [
     check_replicas,
 ]
 
+# Names used in findings (and accepted by the CLI --ignore flag).
+CHECK_NAMES = [
+    "probes",
+    "resources",
+    "image-tag",
+    "security",
+    "service-account",
+    "rolling-update",
+    "termination-grace",
+    "replicas",
+    "pod-disruption-budget",
+]
 
-def run_all(doc: dict, pdbs: list[dict] | None = None) -> list[dict]:
+
+def run_all(
+    doc: dict,
+    pdbs: list[dict] | None = None,
+    ignore: set[str] | frozenset[str] | None = None,
+) -> list[dict]:
+    """Run every check and return findings, minus any ignored checks.
+
+    ``ignore`` holds check names (see CHECK_NAMES). Ignored checks
+    produce no findings, so a team that has deliberately accepted a
+    finding can silence that check without hiding the others.
+    """
+    ignored = set(ignore) if ignore else set()
     findings: list[dict] = []
     for check in ALL_CHECKS:
         findings.extend(check(doc))
     findings.extend(check_pod_disruption_budget(doc, pdbs))
-    return findings
+    return [f for f in findings if f["check"] not in ignored]
