@@ -86,6 +86,232 @@ warnings. Exit codes are the same as in text mode.
 | termination-grace | | workload without `terminationGracePeriodSeconds` set (or with an invalid value) |
 | pod-disruption-budget | | Deployment or StatefulSet with no PodDisruptionBudget in the same namespace whose selector matches its pod template labels |
 
+## Check examples
+
+Each example shows only the fields that check looks at. A Bad
+snippet triggers that check; the Good snippet clears it. A complete
+manifest still needs the other checks to pass as well.
+
+### probes
+
+Bad: a container with no probes.
+
+```yaml
+containers:
+  - name: app
+    image: registry.example.com/app:1.2.3
+```
+
+Good: both probes set.
+
+```yaml
+containers:
+  - name: app
+    image: registry.example.com/app:1.2.3
+    readinessProbe:
+      httpGet:
+        path: /
+        port: 8080
+    livenessProbe:
+      httpGet:
+        path: /
+        port: 8080
+```
+
+### resources
+
+Bad: no requests or limits.
+
+```yaml
+containers:
+  - name: app
+    image: registry.example.com/app:1.2.3
+```
+
+Good: requests and limits both set.
+
+```yaml
+containers:
+  - name: app
+    image: registry.example.com/app:1.2.3
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+```
+
+### image-tag
+
+Bad: a floating tag.
+
+```yaml
+containers:
+  - name: app
+    image: app:latest
+```
+
+Good: a pinned tag.
+
+```yaml
+containers:
+  - name: app
+    image: registry.example.com/app:1.2.3
+```
+
+### security
+
+Bad: no security context, so the container can run as root and
+escalate privileges.
+
+```yaml
+containers:
+  - name: app
+    image: registry.example.com/app:1.2.3
+```
+
+Good: non-root with privilege escalation off.
+
+```yaml
+containers:
+  - name: app
+    image: registry.example.com/app:1.2.3
+    securityContext:
+      runAsNonRoot: true
+      allowPrivilegeEscalation: false
+```
+
+### service-account
+
+Bad: no account named, so the pod runs as `default`.
+
+```yaml
+spec:
+  template:
+    spec:
+      containers:
+        - name: app
+```
+
+Good: a dedicated account.
+
+```yaml
+spec:
+  template:
+    spec:
+      serviceAccountName: web
+      containers:
+        - name: app
+```
+
+### replicas
+
+Bad: a single replica Deployment.
+
+```yaml
+spec:
+  replicas: 1
+```
+
+Good: three replicas.
+
+```yaml
+spec:
+  replicas: 3
+```
+
+### rolling-update
+
+Bad: a RollingUpdate strategy with no `maxUnavailable` set.
+
+```yaml
+spec:
+  strategy:
+    type: RollingUpdate
+```
+
+Good: `maxUnavailable` set explicitly.
+
+```yaml
+spec:
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+```
+
+### termination-grace
+
+Bad: no `terminationGracePeriodSeconds` on the pod spec.
+
+```yaml
+spec:
+  template:
+    spec:
+      containers:
+        - name: app
+```
+
+Good: an explicit shutdown window.
+
+```yaml
+spec:
+  template:
+    spec:
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: app
+```
+
+### pod-disruption-budget
+
+Bad: a Deployment with no budget covering it.
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+spec:
+  template:
+    metadata:
+      labels:
+        app: web
+    spec:
+      containers:
+        - name: app
+```
+
+Good: the same Deployment plus a budget whose selector matches
+its pod template labels, in the same namespace.
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+spec:
+  template:
+    metadata:
+      labels:
+        app: web
+    spec:
+      containers:
+        - name: app
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: web
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: web
+```
+
 ## PodDisruptionBudget coverage
 
 A budget covers a workload when it is in the same namespace and
